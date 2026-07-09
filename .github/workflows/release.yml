@@ -1,0 +1,42 @@
+name: Release plugin version
+
+# Bumps plugins/vercel-gha-deploy/.claude-plugin/plugin.json's "version" to the
+# next vX.Y.Z tag and pushes both the commit and the tag — git tag vX.Y.Z is
+# the source of truth for what `/plugin install` resolves to. This repo has no
+# build/runtime, so "release" is just: bump the manifest, tag, push. See
+# scripts/release.sh for the logic (same tag-bump mechanics used across
+# Uplift's deploy pipelines, adapted for a repo with nothing to deploy).
+#
+# TODO(first-run): arm auto-release on every merge to main once a manual
+# workflow_dispatch run below is verified green (tag pushed + plugin.json
+# version matches it):
+# on:
+#   push:
+#     branches: [main]
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump (git tag vX.Y.Z)"
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+
+permissions:
+  contents: write # commit the version bump + push the vX.Y.Z tag
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags for the version bump
+
+      - name: Release (scripts/release.sh)
+        env:
+          # workflow_dispatch supplies this; a future push-trigger has no
+          # input, so default to a patch bump per merge.
+          BUMP: ${{ github.event.inputs.bump || 'patch' }}
+        run: ./scripts/release.sh release
