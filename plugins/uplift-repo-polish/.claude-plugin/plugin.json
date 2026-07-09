@@ -1,0 +1,15 @@
+{
+  "name": "uplift-repo-polish",
+  "displayName": "Uplift Repo Polish",
+  "description": "Polish a GitHub repo's public presentation so it reads like a well-maintained OSS project — README badges + scannable structure, the About sidebar (description, topics, homepage), a detected LICENSE, and a GitHub Release cut from an existing tag. Detects current state and only fills gaps; confirms before any public publish action.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Uplift Tech"
+  },
+  "homepage": "https://github.com/uplift-technology-company-limited/uplift-plugins",
+  "repository": "https://github.com/uplift-technology-company-limited/uplift-plugins",
+  "license": "MIT",
+  "keywords": ["readme", "badges", "shields", "github", "repo-presentation", "releases", "topics", "license", "developer-tools"],
+  "category": "documentation",
+  "skills": ["./skills/"]
+}

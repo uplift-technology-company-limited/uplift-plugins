@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/github/license/uplift-technology-company-limited/uplift-plugins?color=blue)](LICENSE)
 [![Release](https://img.shields.io/github/v/tag/uplift-technology-company-limited/uplift-plugins?label=release&sort=semver&color=success)](https://github.com/uplift-technology-company-limited/uplift-plugins/releases)
 [![Top language](https://img.shields.io/github/languages/top/uplift-technology-company-limited/uplift-plugins?color=89e051)](https://github.com/uplift-technology-company-limited/uplift-plugins)
-[![Plugins](https://img.shields.io/badge/plugins-3-orange)](#plugins)
+[![Plugins](https://img.shields.io/badge/plugins-4-orange)](#plugins)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
 A [Claude Code](https://docs.claude.com/en/docs/claude-code) **plugin marketplace**
@@ -38,6 +38,7 @@ need the usual `gh`, `vercel`, `aws`, or `docker` CLIs).
 | **`vercel-gha-deploy`** | Vercel deploys via GitHub Actions — `main`-only gate + auto-bumped `vX.Y.Z` version tags. Bootstraps a fresh repo. | `/plugin install vercel-gha-deploy@uplift-plugins` |
 | **`upliftcontrolversion`** | Every deploy auto-bumps a git tag, bakes it into the artifact, shows it to humans, stops `OTEL_SERVICE_VERSION` drift. | `/plugin install upliftcontrolversion@uplift-plugins` |
 | **`upliftgha`** | Set up / migrate / audit GitHub Actions CI/CD — incl. Jenkins → GHA. Routes to the two above; owns AWS EC2 + ECS shapes. | `/plugin install upliftgha@uplift-plugins` |
+| **`uplift-repo-polish`** | Polish a repo's public face — README badges + structure, About (topics/description/homepage), LICENSE, and a GitHub Release from a tag. | `/plugin install uplift-repo-polish@uplift-plugins` |
 
 ---
 
@@ -120,6 +121,31 @@ Ask Claude to "set up GitHub Actions for this repo", "convert this Jenkinsfile
 to GHA", "migrate off Jenkins", or "this repo has no CI yet" and it runs the
 decision tree: detect state → runner choice (self-hosted vs GitHub-hosted) →
 target-specific setup → version wiring → branch gate.
+
+### `uplift-repo-polish`
+
+Makes a repo's **first impression** match the quality of the code inside it — the
+four surfaces a stranger judges in seconds: the **README**, the **About sidebar**
+(description + topics + link), the **LICENSE**, and whether **Releases** look
+alive. It **detects the current state first** (`gh repo view --json` + tag read)
+and only fills gaps, so it never clobbers good existing content.
+
+- **README** — a shields.io badge row (license, top language, latest tag/release,
+  stars + domain badges) and a scannable spine (hero, quick start, feature table,
+  layout, releases, contributing) wrapped around whatever prose already reads well.
+- **About** — `gh repo edit` for a crisp description, findable topics/tags, and a
+  homepage URL (fills only what's empty).
+- **LICENSE** — adds one (MIT default, confirmed) if GitHub detects none.
+- **Releases** — turns an existing `vX.Y.Z` tag into a GitHub Release with real
+  notes. Publishing is an outward-facing action, so it **confirms before publish**.
+
+Ask Claude to "ตกแต่ง repo ให้ดูดี", "ใส่ badge ให้ README", "set up the About
+section / topics", "add a license", or "make this repo look like <reference>" and
+it runs detect → README → About → LICENSE → (confirm →) Release.
+
+```
+/plugin install uplift-repo-polish@uplift-plugins
+```
 
 ## Repository layout
 

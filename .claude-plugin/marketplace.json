@@ -20,6 +20,11 @@
       "name": "upliftgha",
       "source": "./plugins/upliftgha",
       "description": "Set up, migrate, or audit GitHub Actions CI/CD for a repo — including converting a Jenkins pipeline to GHA. Routes to vercel-gha-deploy for Vercel frontends and always wires in upliftcontrolversion; owns the AWS EC2 and ECS deploy shapes directly."
+    },
+    {
+      "name": "uplift-repo-polish",
+      "source": "./plugins/uplift-repo-polish",
+      "description": "Polish a GitHub repo's public presentation — README badges + scannable structure, the About sidebar (description, topics, homepage), a detected LICENSE, and a GitHub Release cut from an existing tag. Detects current state and only fills gaps; confirms before any public publish."
     }
   ]
 }
