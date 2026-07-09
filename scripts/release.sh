@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
-# Publish a new version of the vercel-gha-deploy plugin.
+# Publish a new version of this marketplace's plugins.
 #
-# This repo has no build or runtime — it's a Claude Code plugin (markdown +
-# templates + manifests) fetched by `/plugin install`. So there's nothing to
-# "deploy"; publishing a version means: bump the git tag (vX.Y.Z) and keep
-# plugins/vercel-gha-deploy/.claude-plugin/plugin.json's "version" field in
-# sync with it, so both agree on what a fresh install resolves to.
+# This repo has no build or runtime — it's a Claude Code plugin marketplace
+# (markdown + templates + manifests) fetched by `/plugin install`. So there's
+# nothing to "deploy"; publishing a version means: bump the git tag (vX.Y.Z)
+# and keep every plugins/*/.claude-plugin/plugin.json's "version" field in
+# sync with it, so a fresh install always resolves to the number the tag says.
+# All plugins in this marketplace share one release cadence — simpler than
+# tracking independent per-plugin versions for a repo this size.
 #
 #   ./scripts/release.sh release              # patch bump (default)
-#   BUMP=minor ./scripts/release.sh release   # new feature in the skill
-#   BUMP=major ./scripts/release.sh release   # breaking change to the workflow contract
+#   BUMP=minor ./scripts/release.sh release   # new feature in a skill
+#   BUMP=major ./scripts/release.sh release   # breaking change to a workflow contract
 #
 # The tag is only pushed AFTER the manifest-bump commit succeeds — a failed
 # bump leaves no orphan tag. marketplace.json intentionally does NOT carry its
 # own version field: if a version exists in both places, plugin.json wins
-# silently, so this repo keeps exactly one source of truth for the number.
+# silently, so each plugin keeps exactly one source of truth for its number.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
-
-PLUGIN_JSON="$PROJECT_DIR/plugins/vercel-gha-deploy/.claude-plugin/plugin.json"
 
 BUMP="${BUMP:-patch}"
 RELEASE_TAG=""
@@ -49,13 +49,16 @@ compute_version() {
 }
 
 bump_manifest() {
-  node -e "
-    const fs = require('fs');
-    const p = '${PLUGIN_JSON}';
-    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
-    j.version = '${APP_VERSION}';
-    fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
-  "
+  for plugin_json in "$PROJECT_DIR"/plugins/*/.claude-plugin/plugin.json; do
+    [ -f "$plugin_json" ] || continue
+    node -e "
+      const fs = require('fs');
+      const p = '${plugin_json}';
+      const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+      j.version = '${APP_VERSION}';
+      fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\n');
+    "
+  done
 }
 
 # Commit the manifest bump, then tag + push — in that order, so a push failure
@@ -63,7 +66,7 @@ bump_manifest() {
 commit_and_tag() {
   git config user.name  >/dev/null 2>&1 || git config user.name  "uplift-deploy"
   git config user.email >/dev/null 2>&1 || git config user.email "deploy@uplifttech.co"
-  git add "$PLUGIN_JSON"
+  git add plugins/*/.claude-plugin/plugin.json
   # [skip ci] — this commit is pushed straight to main by the release workflow
   # itself; without this, a push-triggered workflow would re-trigger on its
   # own bump commit.

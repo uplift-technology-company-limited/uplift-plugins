@@ -10,6 +10,11 @@
       "name": "vercel-gha-deploy",
       "source": "./plugins/vercel-gha-deploy",
       "description": "Set up Vercel deploys via GitHub Actions with a main-only branch gate and auto-bumped vX.Y.Z version tags. Bootstraps a fresh repo if it isn't linked yet."
+    },
+    {
+      "name": "upliftcontrolversion",
+      "source": "./plugins/upliftcontrolversion",
+      "description": "Wire a repo so every deploy auto-bumps a git tag (vX.Y.Z), bakes it into the artifact, shows it to humans, and stops OTEL_SERVICE_VERSION from drifting off a hardcoded value. Uplift's own versioning playbook."
     }
   ]
 }
