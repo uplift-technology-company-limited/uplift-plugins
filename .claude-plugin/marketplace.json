@@ -1,0 +1,15 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "aediter-plugins",
+  "owner": {
+    "name": "9Aediter"
+  },
+  "description": "Claude Code plugins by 9Aediter",
+  "plugins": [
+    {
+      "name": "vercel-gha-deploy",
+      "source": "./plugins/vercel-gha-deploy",
+      "description": "Set up Vercel deploys via GitHub Actions with a main-only branch gate and auto-bumped vX.Y.Z version tags. Bootstraps a fresh repo if it isn't linked yet."
+    }
+  ]
+}

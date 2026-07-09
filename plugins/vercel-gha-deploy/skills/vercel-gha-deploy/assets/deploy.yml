@@ -1,0 +1,81 @@
+name: Deploy <PROJECT_NAME> (production · Vercel)
+
+# Vercel deploy from GitHub Actions + auto-bumped vX.Y.Z tag. The runner builds
+# with NEXT_PUBLIC_APP_VERSION baked in, deploys the prebuilt output to Vercel
+# production, then pushes the tag ONLY on success. All the logic lives in
+# scripts/deploy.sh, so a CI deploy is identical to a manual
+# `VERCEL_TOKEN=… ./scripts/deploy.sh deploy`.
+#
+# Secrets: VERCEL_TOKEN (org-level recommended), plus VERCEL_ORG_ID /
+# VERCEL_PROJECT_ID per repo (from .vercel/project.json).
+
+on:
+  # TODO(first-run): arm auto-deploy after the first workflow_dispatch run is
+  # verified green (tag pushed + UI shows the new vX.Y.Z):
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump for this deploy (git tag vX.Y.Z)"
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+
+concurrency:
+  group: deploy-<PROJECT_NAME>-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Typecheck gate → build → Vercel prod (+ version tag)
+    # Use GitHub-hosted runners, or a self-hosted label, e.g.:
+    #   runs-on: [self-hosted, linux, arm64, <your-runner-label>]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: write # deploy.sh auto-bumps + pushes the vX.Y.Z release tag
+
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}          # org-level secret recommended
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags for the version bump
+
+      - name: Guard — must be on main
+        env:
+          GH_REF: ${{ github.ref }} # route through env, never inline in run:
+        run: |
+          if [ "$GH_REF" != "refs/heads/main" ]; then
+            echo "::error::Deploy must run from main (got $GH_REF)."
+            exit 1
+          fi
+
+      # Swap for your package manager: bun / npm / pnpm / yarn.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Deploy (scripts/deploy.sh)
+        env:
+          BUMP: ${{ github.event.inputs.bump }}
+        run: ./scripts/deploy.sh deploy
+
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://<PROD_DOMAIN>/ || echo 000)
+            echo "attempt $i → HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 8
+          done
+          echo "::error::<PROJECT_NAME> did not return 200 after deploy"
+          exit 1
