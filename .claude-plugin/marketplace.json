@@ -1,10 +1,10 @@
 {
   "$schema": "https://code.claude.com/schemas/marketplace.json",
-  "name": "aediter-plugins",
+  "name": "uplift-plugins",
   "owner": {
-    "name": "9Aediter"
+    "name": "Uplift Tech"
   },
-  "description": "Claude Code plugins by 9Aediter",
+  "description": "Claude Code plugins by Uplift Tech",
   "plugins": [
     {
       "name": "vercel-gha-deploy",

@@ -34,8 +34,8 @@ tag per release. It supports both GitHub-hosted and **self-hosted** runners.
 ## Install
 
 ```
-/plugin marketplace add 9Aediter/vercel-gha-deploy
-/plugin install vercel-gha-deploy@aediter-plugins
+/plugin marketplace add uplift-technology-company-limited/vercel-gha-deploy
+/plugin install vercel-gha-deploy@uplift-plugins
 ```
 
 The skill then activates automatically when relevant. You can also invoke it
