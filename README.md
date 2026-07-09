@@ -1,10 +1,45 @@
 # Uplift Tech — Claude Code plugins
 
-A [Claude Code](https://docs.claude.com/en/docs/claude-code) plugin marketplace
-published by Uplift Tech. One repo, multiple plugins — each documents a real
-piece of Uplift's engineering convention as a reusable Claude Code skill.
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin%20marketplace-6C4BF6?logo=anthropic&logoColor=white)](https://docs.claude.com/en/docs/claude-code)
+[![License: MIT](https://img.shields.io/github/license/uplift-technology-company-limited/uplift-plugins?color=blue)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/uplift-technology-company-limited/uplift-plugins?label=release&sort=semver&color=success)](https://github.com/uplift-technology-company-limited/uplift-plugins/releases)
+[![Top language](https://img.shields.io/github/languages/top/uplift-technology-company-limited/uplift-plugins?color=89e051)](https://github.com/uplift-technology-company-limited/uplift-plugins)
+[![Plugins](https://img.shields.io/badge/plugins-3-orange)](#plugins)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
+
+A [Claude Code](https://docs.claude.com/en/docs/claude-code) **plugin marketplace**
+published by Uplift Tech. One repo, multiple plugins — each documents a real piece
+of Uplift's engineering convention as a reusable Claude Code skill, so Claude ships
+your deploys the way your team already does it.
+
+> **No build, no runtime.** This is markdown + templates + manifests fetched by
+> `/plugin install` — nothing to deploy. Versioning = a shared `vX.Y.Z` git tag
+> across all plugins (see [Releases](#releases)).
+
+## Quick start
+
+```
+/plugin marketplace add uplift-technology-company-limited/uplift-plugins
+/plugin install <plugin-name>@uplift-plugins
+```
+
+Skills activate automatically when relevant. You can also invoke one explicitly,
+e.g. `/vercel-gha-deploy:vercel-gha-deploy` or
+`/upliftcontrolversion:upliftcontrolversion`.
+
+**Requirements:** [Claude Code](https://docs.claude.com/en/docs/claude-code)
+(the plugins are guidance + copy-paste templates; the deploy targets they wire up
+need the usual `gh`, `vercel`, `aws`, or `docker` CLIs).
 
 ## Plugins
+
+| Plugin | What it does | Install |
+| ------ | ------------ | ------- |
+| **`vercel-gha-deploy`** | Vercel deploys via GitHub Actions — `main`-only gate + auto-bumped `vX.Y.Z` version tags. Bootstraps a fresh repo. | `/plugin install vercel-gha-deploy@uplift-plugins` |
+| **`upliftcontrolversion`** | Every deploy auto-bumps a git tag, bakes it into the artifact, shows it to humans, stops `OTEL_SERVICE_VERSION` drift. | `/plugin install upliftcontrolversion@uplift-plugins` |
+| **`upliftgha`** | Set up / migrate / audit GitHub Actions CI/CD — incl. Jenkins → GHA. Routes to the two above; owns AWS EC2 + ECS shapes. | `/plugin install upliftgha@uplift-plugins` |
+
+---
 
 ### `vercel-gha-deploy`
 
@@ -38,10 +73,6 @@ tag per release. Supports both GitHub-hosted and **self-hosted** runners.
 `vercel --prod` runs, Vercel dashboard settings, Vercel's native git
 integration, or deploys to other targets (AWS ECS, Docker, a VPS).
 
-```
-/plugin install vercel-gha-deploy@uplift-plugins
-```
-
 Templates: [`plugins/vercel-gha-deploy/skills/vercel-gha-deploy/assets/`](plugins/vercel-gha-deploy/skills/vercel-gha-deploy/assets)
 (`deploy.sh`, `deploy.yml` — fill in `<PROJECT_NAME>`, `<PROD_DOMAIN>`, runner label).
 
@@ -63,10 +94,6 @@ Ask Claude to "add version tags that bump automatically on every deploy", "show
 the running version in the UI", "add a `/version` endpoint", or "stop
 `OTEL_SERVICE_VERSION` from drifting" and it walks through both the shared
 tag-bump mechanics and the shape-specific wiring.
-
-```
-/plugin install upliftcontrolversion@uplift-plugins
-```
 
 ### `upliftgha`
 
@@ -94,20 +121,41 @@ to GHA", "migrate off Jenkins", or "this repo has no CI yet" and it runs the
 decision tree: detect state → runner choice (self-hosted vs GitHub-hosted) →
 target-specific setup → version wiring → branch gate.
 
-```
-/plugin install upliftgha@uplift-plugins
-```
-
-## Install the marketplace
+## Repository layout
 
 ```
-/plugin marketplace add uplift-technology-company-limited/uplift-plugins
-/plugin install <plugin-name>@uplift-plugins
+.claude-plugin/marketplace.json   # marketplace manifest (name, owner, plugin list)
+plugins/
+  vercel-gha-deploy/              # each plugin: skills/ + .claude-plugin/plugin.json
+  upliftcontrolversion/
+  upliftgha/
+scripts/release.sh                # shared vX.Y.Z release (bumps tag + plugin.json versions)
+.github/workflows/release.yml     # release automation
 ```
 
-Skills activate automatically when relevant. You can also invoke one explicitly,
-e.g. `/vercel-gha-deploy:vercel-gha-deploy` or
-`/upliftcontrolversion:upliftcontrolversion`.
+## Releases
+
+All plugins in this marketplace share **one release cadence** — a single
+`vX.Y.Z` git tag, kept in sync with every `plugins/*/.claude-plugin/plugin.json`
+`version` field, so a fresh `/plugin install` always resolves to the number the
+tag says.
+
+```bash
+./scripts/release.sh release              # patch bump (default)
+BUMP=minor ./scripts/release.sh release   # new feature in a skill
+BUMP=major ./scripts/release.sh release   # breaking change to a workflow contract
+```
+
+See the [releases page](https://github.com/uplift-technology-company-limited/uplift-plugins/releases).
+
+## Contributing
+
+PRs welcome. Each plugin lives under `plugins/<name>/` with its own
+`.claude-plugin/plugin.json` and a `skills/` directory. To add or change one:
+
+1. Edit the skill markdown / templates under `plugins/<name>/`.
+2. Keep `.claude-plugin/marketplace.json` in sync (name, source, description).
+3. Cut a release with `./scripts/release.sh` so tag + `plugin.json` versions match.
 
 ## License
 
