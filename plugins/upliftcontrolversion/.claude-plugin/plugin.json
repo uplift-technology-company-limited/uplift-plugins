@@ -2,14 +2,24 @@
   "name": "upliftcontrolversion",
   "displayName": "Uplift Control Version",
   "description": "Uplift's own playbook for wiring a repo so every deploy auto-bumps a git tag (vX.Y.Z), bakes it into the artifact, shows it to humans (UI label or /version API), and keeps OTEL_SERVICE_VERSION from drifting off a hardcoded value. Documents the real convention used across Uplift's frontend (Next.js/Docker) and backend (Bun/Elysia/ECS) repos.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Uplift Tech"
   },
   "homepage": "https://github.com/uplift-technology-company-limited/uplift-plugins",
   "repository": "https://github.com/uplift-technology-company-limited/uplift-plugins",
   "license": "MIT",
-  "keywords": ["versioning", "semver", "git-tags", "ci-cd", "deploy", "observability", "otel"],
+  "keywords": [
+    "versioning",
+    "semver",
+    "git-tags",
+    "ci-cd",
+    "deploy",
+    "observability",
+    "otel"
+  ],
   "category": "deployment",
-  "skills": ["./skills/"]
+  "skills": [
+    "./skills/"
+  ]
 }
