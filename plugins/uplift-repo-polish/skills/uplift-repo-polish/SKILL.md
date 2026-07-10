@@ -1,17 +1,20 @@
 ---
 name: uplift-repo-polish
 description: >-
-  Polish a GitHub repository's public presentation so it reads like a
-  well-maintained OSS project — README badges + scannable structure, the About
-  sidebar (description, topics, homepage), a detected LICENSE, and a published
-  GitHub Release cut from an existing tag. Use this WHENEVER the user wants to
-  make a repo "look professional / more legit", add shields/badges, fill in the
-  About section or topics/tags, add a license, turn a vX.Y.Z tag into a real
-  Release so the Releases sidebar shows up, or points at a nice reference repo
-  and says "make mine look like that". Trigger on phrases like "ตกแต่ง repo",
-  "แต่ง readme ให้สวย", "ใส่ badge", "set up the About section", "add topics",
-  "add a license", "make a release", "polish this repo", "ทำ repo ให้ดูดี",
-  even if they don't name every element — infer the missing ones and fill gaps.
+  Polish a GitHub repository's presentation so it reads like a well-maintained
+  project — README badges (static ones for private repos) + scannable structure,
+  the About sidebar (description, topics, homepage), a detected LICENSE (skipped
+  for proprietary/private repos), GitHub Releases cut/backfilled from existing
+  tags, and — with a small deploy-pipeline change — real GitHub Deployment
+  records so the Deployments tab isn't empty. Use this WHENEVER the user wants to
+  make a repo "look professional / more legit / เรียบร้อย", add shields/badges,
+  fill in the About section or topics/tags, add a license, turn vX.Y.Z tags into
+  Releases so the Releases sidebar shows up, make the Deployments tab reflect real
+  deploys, or points at a nice reference repo and says "make mine look like that".
+  Trigger on phrases like "ตกแต่ง repo", "แต่ง readme ให้สวย", "ใส่ badge",
+  "set up the About section", "add topics", "add a license", "make a release",
+  "wire deployments", "polish this repo", "ทำ repo ให้ดูดี" — works on private
+  repos too — even if they don't name every element; infer the rest and fill gaps.
 version: 1.0.0
 ---
 
@@ -20,9 +23,10 @@ version: 1.0.0
 Make a GitHub repo's first impression match the quality of the code inside it.
 A repo that a stranger lands on is judged in seconds by its **README**, its
 **About sidebar** (description + topics + link), whether it has a **license**,
-and whether **Releases** look alive. This skill fills those four surfaces —
-detecting what's already there and only touching what's missing or weak, so you
-never clobber good existing content.
+and whether **Releases** (and **Deployments**) look alive. This skill fills those
+surfaces — detecting what's already there and only touching what's missing or
+weak, so you never clobber good existing content. It adapts to **private**
+repos (static badges, no OSS license) as readily as public ones.
 
 ## Why detect-first matters
 
@@ -38,7 +42,7 @@ git -C <repo> tag --sort=-v:refname | head   # existing vX.Y.Z tags
 
 Read the existing `README.md` too. Decide per-surface: **keep / augment / add**.
 
-## The four surfaces
+## The surfaces
 
 ### 1. README — badges + structure
 
@@ -58,6 +62,13 @@ Add 1–2 **domain badges** that say what the project *is* (a static
 framework, "Claude Code plugin", "PRs welcome"). Don't overload it: ~4–6 badges,
 one line. Use `github/v/tag` (not `github/v/release`) when a tag exists but no
 GitHub Release does yet — the badge still resolves.
+
+> **Private repos:** the dynamic `github/*` badges above read data shields.io
+> can't fetch without auth, so on a private repo they render as `invalid`. Use
+> **static** badges instead — `img.shields.io/badge/LABEL-VALUE-COLOR` for the
+> stack (TypeScript, Bun, …), an "internal service" tag, and
+> `versioning-SemVer%20vX.Y.Z` (prefer "uses SemVer" over a hardcoded number,
+> which goes stale). Static badges render everywhere.
 
 Then make the body **scannable** — a reader should grasp the project without
 scrolling. A dependable spine (adapt, don't force every heading):
@@ -92,10 +103,17 @@ surface, not decoration — pick findable ones.
 
 If `licenseInfo` is null, there's no license and GitHub shows nothing in the
 sidebar (and the repo is legally "all rights reserved"). Confirm the license
-choice with the user (**MIT** is the common default for tooling), then add a
+choice with the user (**MIT** is the common default for open tooling), then add a
 real `LICENSE` file with the correct year + copyright holder — GitHub
 auto-detects the SPDX id and renders the sidebar badge. The `github/license`
 README badge then resolves too.
+
+> **Don't OSS-license a proprietary repo.** A private/internal service (an auth
+> service, a company backend) is *not* open source — adding MIT would wrongly
+> license your code as free for anyone to use. For those, leave it unlicensed
+> (default "all rights reserved") or add a short proprietary/internal notice, and
+> **skip the license badge**. Only add an OSS license when the repo is genuinely
+> meant to be shared. When unsure whether a repo is meant to be open, ask.
 
 ### 4. Releases — publish a Release from a tag
 
@@ -110,11 +128,46 @@ Write notes that summarize what's in the release (features / components / how to
 install) — not just "initial release". If there's no tag yet, don't invent one;
 suggest the repo's release process (or a first `v1.0.0`) and let the user drive.
 
-> **Publishing a Release is a public, outward-facing action** (it creates a
-> surface others will see and get notified about). **Always confirm with the
-> user before running `gh release create`** — state the tag and show the notes
-> you'd publish, and wait for an explicit go-ahead. The same applies to changing
-> a public repo's description/topics if the user hasn't clearly asked for it.
+**Backfilling a tag history.** A repo whose deploy pipeline pushes `vX.Y.Z` tags
+but never publishes Releases has a long tag list and an empty Releases tab. You
+can fill it in one pass — loop the tags oldest→newest, letting GitHub generate
+the changelog from the commits/PRs since the previous tag:
+
+```bash
+for tag in $(git tag -l 'v*' --sort=v:refname); do
+  gh release create "$tag" --repo OWNER/REPO --title "$tag" --generate-notes --latest=false
+done   # then re-run the newest with --latest
+```
+
+> **Publishing a Release is an outward-facing "create surface" action** — even on
+> a private repo (there it's visible to members, not the public, but it's still a
+> new surface + notifications). **Always confirm with the user before
+> `gh release create`** — state the tag(s) and show the notes — and wait for an
+> explicit go-ahead. Same for changing a public repo's description/topics the
+> user hasn't clearly asked for.
+
+### 5. Deployments — reflect real deploys (needs pipeline wiring)
+
+The **Deployments** tab is populated by the GitHub Deployments API — a deploy has
+to *write* a record. Platforms with a native git integration (Vercel, Netlify)
+do it automatically; a **script / ECS / EC2 deploy does not**, so the tab stays
+empty even though the service ships constantly. Unlike the other surfaces this
+isn't a one-off edit — it's a small change to the deploy pipeline:
+
+- A shared helper (e.g. `scripts/gh-deployment.sh`) that `POST`s a deployment
+  (`ref`, `environment: production`, `required_contexts: []`, `auto_merge: false`,
+  `production_environment: true`) then a `success` status carrying an
+  `environment_url`, via `gh api`. Make it **best-effort — always exit 0** so a
+  tracking hiccup can never fail a deploy.
+- Call it from **every** deploy path so the tab is complete: a local
+  `scripts/deploy.sh` (Fast Deploy) after a successful rollout, AND the CI
+  workflow after its deploy step (add `permissions: deployments: write`; pass
+  values through `env:`, never inline `${{ }}` into `run:` — injection-safe).
+- **Backfill** the current version once (run the helper for the live tag) so the
+  tab isn't empty until the next deploy.
+
+Because it touches the deploy pipeline, land it through the repo's normal
+branch/deploy flow; it only shows new entries on the next real deploy.
 
 ## Working order
 
@@ -126,8 +179,14 @@ Do the safe, reversible edits first and the public one last:
    default branch per the repo's convention (a README change is low-risk; match
    how the team works).
 3. **About** — `gh repo edit` description/homepage/topics (fill gaps only).
-4. **LICENSE** — add if missing (confirm the license).
-5. **Release** — **confirm, then** `gh release create` from the existing tag.
+4. **LICENSE** — add if missing (confirm the license) — **unless** the repo is
+   private/proprietary, in which case skip it.
+5. **Release** — **confirm, then** `gh release create` from the existing tag(s)
+   (backfill the whole tag history if the Releases tab is empty).
+6. **Deployments** *(optional — only if the user wants the Deployments tab
+   populated)* — wire the deploy pipeline (helper + deploy.sh + CI) and backfill
+   the current version. This is a pipeline change, so land it through the repo's
+   normal branch/deploy flow, not a one-off edit.
 
 Finish by reporting each surface's before→after so the user can see the repo now
 matches the reference they had in mind.
