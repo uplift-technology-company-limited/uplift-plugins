@@ -3,8 +3,9 @@ name: uplift-repo-polish
 description: >-
   Polish a GitHub repository's presentation so it reads like a well-maintained
   project — README badges (static ones for private repos) + scannable structure,
-  the About sidebar (description, topics, homepage), a detected LICENSE (skipped
-  for proprietary/private repos), GitHub Releases cut/backfilled from existing
+  the About sidebar (description, topics, homepage), a LICENSE it always asks
+  about first (OSS, or an explicit proprietary one for private/internal repos),
+  GitHub Releases cut/backfilled from existing
   tags, and — with a small deploy-pipeline change — real GitHub Deployment
   records so the Deployments tab isn't empty. Use this WHENEVER the user wants to
   make a repo "look professional / more legit / เรียบร้อย", add shields/badges,
@@ -99,21 +100,45 @@ Topics: lowercase, hyphenated, **5–10** that a searcher would actually use
 (language, framework, domain, "cli", "developer-tools"). This is real discovery
 surface, not decoration — pick findable ones.
 
-### 3. LICENSE — so GitHub detects it
+### 3. LICENSE — pick deliberately, never assume
 
-If `licenseInfo` is null, there's no license and GitHub shows nothing in the
-sidebar (and the repo is legally "all rights reserved"). Confirm the license
-choice with the user (**MIT** is the common default for open tooling), then add a
-real `LICENSE` file with the correct year + copyright holder — GitHub
-auto-detects the SPDX id and renders the sidebar badge. The `github/license`
-README badge then resolves too.
+A license is a **legal + business decision, not a cosmetic one** — so **ALWAYS
+ask the user which license they want before adding one. Never default to MIT (or
+anything) silently.** If `licenseInfo` is null there's no license and the repo is
+legally "all rights reserved" with nothing stated; lay out the choice plainly and
+let the user pick:
 
-> **Don't OSS-license a proprietary repo.** A private/internal service (an auth
-> service, a company backend) is *not* open source — adding MIT would wrongly
-> license your code as free for anyone to use. For those, leave it unlicensed
-> (default "all rights reserved") or add a short proprietary/internal notice, and
-> **skip the license badge**. Only add an OSS license when the repo is genuinely
-> meant to be shared. When unsure whether a repo is meant to be open, ask.
+- **Open source** — permissive (**MIT**, **Apache 2.0**) if anyone may use it
+  freely; copyleft (**GPL**) if forks must stay open. Add the SPDX `LICENSE` file
+  (correct year + copyright holder) — GitHub auto-detects it, shows the sidebar
+  badge, and the `github/license` README badge resolves.
+- **Proprietary / private / internal** (a company service — auth, backend, …) —
+  it is **not** open source, and MIT would wrongly license your code as
+  free-to-use. Don't just leave it blank — make the terms **explicit**: add a
+  proprietary `LICENSE` and set `package.json` `"license": "UNLICENSED"` (with
+  `"private": true`). GitHub won't render an SPDX badge for a custom license —
+  that's expected; the file stating the terms is the point.
+
+Proprietary `LICENSE` template (swap `<YEAR>` + `<Company>`):
+
+```
+Copyright (c) <YEAR> <Company>. All rights reserved.
+
+PROPRIETARY AND CONFIDENTIAL
+
+This software and its source code are the proprietary and confidential property
+of <Company>, licensed for internal use by <Company> and its authorized
+personnel only. No part may be copied, modified, distributed, sublicensed, sold,
+or made available to any third party without the prior written permission of
+<Company>. Unauthorized use, reproduction, or distribution is strictly prohibited.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+```
+
+> When you can't tell whether a repo is meant to be open or closed, **ask** — a
+> public marketing/tooling repo usually wants an OSS license; an internal service
+> almost always wants proprietary. Guessing wrong here is a legal mistake, not a
+> style one.
 
 ### 4. Releases — publish a Release from a tag
 
@@ -179,8 +204,9 @@ Do the safe, reversible edits first and the public one last:
    default branch per the repo's convention (a README change is low-risk; match
    how the team works).
 3. **About** — `gh repo edit` description/homepage/topics (fill gaps only).
-4. **LICENSE** — add if missing (confirm the license) — **unless** the repo is
-   private/proprietary, in which case skip it.
+4. **LICENSE** — if missing, **ask which license** (never assume MIT). Open → an
+   SPDX file (MIT/Apache/GPL); proprietary/private → an explicit proprietary
+   LICENSE + `package.json "license": "UNLICENSED"`.
 5. **Release** — **confirm, then** `gh release create` from the existing tag(s)
    (backfill the whole tag history if the Releases tab is empty).
 6. **Deployments** *(optional — only if the user wants the Deployments tab
