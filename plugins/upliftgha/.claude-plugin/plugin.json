@@ -2,7 +2,7 @@
   "name": "upliftgha",
   "displayName": "Uplift GHA",
   "description": "Set up, migrate, or audit GitHub Actions CI/CD for a repo — including converting a Jenkins pipeline to GHA, or building one from scratch. Routes to the sibling vercel-gha-deploy plugin for Vercel frontends and always wires in upliftcontrolversion's version-tag contract; owns the AWS EC2 (docker-compose) and ECS (Fargate + ECR) deploy shapes directly.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": {
     "name": "Uplift Tech"
   },
