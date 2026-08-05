@@ -39,6 +39,7 @@ need the usual `gh`, `vercel`, `aws`, or `docker` CLIs).
 | **`upliftcontrolversion`** | Every deploy auto-bumps a git tag, bakes it into the artifact, shows it to humans, stops `OTEL_SERVICE_VERSION` drift. | `/plugin install upliftcontrolversion@uplift-plugins` |
 | **`upliftgha`** | Set up / migrate / audit GitHub Actions CI/CD — incl. Jenkins → GHA. Routes to the two above; owns AWS EC2 + ECS shapes. | `/plugin install upliftgha@uplift-plugins` |
 | **`uplift-repo-polish`** | Polish a repo's public face — README badges + structure, About (topics/description/homepage), LICENSE, and a GitHub Release from a tag. | `/plugin install uplift-repo-polish@uplift-plugins` |
+| **`uplift-cli`** | Run + troubleshoot an Uplift dev machine — the local Postgres/Redis/RabbitMQ stack, the workspace repos, AWS SSO/ECR. <sup>lives in the `uplift-cli` repo</sup> | `/plugin install uplift-cli@uplift-plugins` |
 
 ---
 
@@ -147,6 +148,28 @@ it runs detect → README → About → LICENSE → (confirm →) Release.
 /plugin install uplift-repo-polish@uplift-plugins
 ```
 
+### `uplift-cli`
+
+Teaches Claude to drive the **`uplift` CLI** — the local dev stack (`up`, `down`,
+`restart`, `reset`, `logs`, `ps`), the workspace repos (`sync`, `status`,
+`list`), and AWS access (`aws-login`, `pull`).
+
+Leads with the two settings that explain most confusing behaviour:
+`UPLIFT_WORKSPACE` (wrong path ⇒ every repo reports as *not cloned*, which reads
+like a broken install) and install mode (*repo* vs *bundled* assets, which
+decides whether an edit to `infra` takes effect at all).
+
+> **Sourced from another repo.** Unlike the plugins above, this one lives in
+> [`uplift-cli`](https://github.com/uplift-technology-company-limited/uplift-cli)
+> — it documents that codebase, so the skill and the commands it describes have
+> to change in the same PR. The marketplace entry pins a commit SHA; bump it
+> here when the skill changes there. `scripts/release.sh` does not touch it,
+> since it only walks this repo's `plugins/*`.
+
+```
+/plugin install uplift-cli@uplift-plugins
+```
+
 ## Repository layout
 
 ```
@@ -155,6 +178,9 @@ plugins/
   vercel-gha-deploy/              # each plugin: skills/ + .claude-plugin/plugin.json
   upliftcontrolversion/
   upliftgha/
+  uplift-repo-polish/
+                                  # uplift-cli is NOT here — sourced from the
+                                  # uplift-cli repo via git-subdir + a pinned SHA
 scripts/release.sh                # shared vX.Y.Z release (bumps tag + plugin.json versions)
 .github/workflows/release.yml     # release automation
 ```
@@ -171,6 +197,10 @@ tag says.
 BUMP=minor ./scripts/release.sh release   # new feature in a skill
 BUMP=major ./scripts/release.sh release   # breaking change to a workflow contract
 ```
+
+Externally-sourced plugins sit outside that cadence — `uplift-cli` carries its
+own version and is pinned by SHA in the manifest, so a release here neither
+bumps nor moves it.
 
 See the [releases page](https://github.com/uplift-technology-company-limited/uplift-plugins/releases).
 

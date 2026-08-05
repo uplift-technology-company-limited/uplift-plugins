@@ -25,6 +25,16 @@
       "name": "uplift-repo-polish",
       "source": "./plugins/uplift-repo-polish",
       "description": "Polish a GitHub repo's public presentation — README badges + scannable structure, the About sidebar (description, topics, homepage), a detected LICENSE, and a GitHub Release cut from an existing tag. Detects current state and only fills gaps; confirms before any public publish."
+    },
+    {
+      "name": "uplift-cli",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/uplift-technology-company-limited/uplift-cli.git",
+        "path": "plugins/uplift-cli",
+        "sha": "168f57d2a4894dd2790d5fc6bbb6ac864891812f"
+      },
+      "description": "Drive the `uplift` CLI to run and troubleshoot an Uplift developer's local environment — the Postgres/Redis/RabbitMQ dev stack, the workspace repos, and AWS SSO/ECR access. Lives in the uplift-cli repo so the skill and the commands it documents change in the same PR."
     }
   ]
 }
