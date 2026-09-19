@@ -13,7 +13,8 @@ dashes=$(printf '%s' "$body" | grep -o '—\|–' | wc -l)
 dots=$(printf '%s' "$body" | grep -c '·.*·.*·.*·')
 wiki=$(printf '%s' "$body" | grep -o '\[\[[^]]*\]\]' | wc -l)
 mermaid=$(grep -c '^```mermaid' "$f")
-long=$(printf '%s' "$body" | python3 -c 'import sys; print(sum(1 for l in sys.stdin if len(l.rstrip("\n"))>220))')
+# ไม่นับ URL ในลิงก์ markdown ](...) เพราะคนอ่านเห็นแค่ข้อความลิงก์
+long=$(printf '%s' "$body" | python3 -c 'import sys,re; print(sum(1 for l in sys.stdin if len(re.sub(r"\]\([^)]*\)", "]", l.rstrip("\n")))>220))')
 
 bad=0
 report() { printf '%-34s %4s  %s\n' "$1" "$2" "$3"; [ "$2" -gt 0 ] && bad=1; }
