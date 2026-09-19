@@ -128,7 +128,7 @@ python3 <skill>/scripts/publish.py --list --project <project>
 ```
 
 - **คำเตือน: อัปเดตทับ page ที่เคยมีคนเปิดแล้ว เนื้อหาเก่าจะกลับมา** Plane เก็บเนื้อหาจริงเป็นเอกสาร Yjs ในเซิร์ฟเวอร์ live และในเบราว์เซอร์ที่เคยเปิด page นั้น พอเราเขียน HTML ใหม่ลงฐานข้อมูล ตัวที่ค้างอยู่จะบันทึกของเก่าทับกลับภายในไม่กี่นาที (เจอจริง 19 ก.ย. 2569: เขียนทับตอน 09:28 แล้วถูกทับกลับตอน 09:30)
-  - page ที่มีคนเปิดแล้ว ให้ **สร้าง page ใหม่ แล้ว archive ตัวเก่า** (`page.archived_at = timezone.now()` ซึ่งกู้คืนได้) แล้วส่งลิงก์ใหม่ให้ผู้ใช้
+  - page ที่มีคนเปิดแล้ว ให้ **สร้าง page ใหม่ แล้ว archive ตัวเก่า** และ archive ก็ต่อเมื่อ publish.py พิมพ์ "สร้างแล้ว <id>" จริงเท่านั้น (อย่าต่อคำสั่ง archive หลัง `publish.py | tail` ด้วย `&&` เพราะ exit code ของ pipe มาจาก tail ทำให้ archive ทำงานแม้ publish ล้ม) (`page.archived_at = timezone.now()` ซึ่งกู้คืนได้) แล้วส่งลิงก์ใหม่ให้ผู้ใช้
   - หลังนำขึ้น รอ 2-3 นาทีแล้วอ่าน `description_html` ซ้ำ ถ้า `updated_at` เปลี่ยนหรือเนื้อหาเก่ากลับมา แปลว่าโดนทับ
 - script แปลง markdown เป็น HTML (markdown-it) แล้วเขียนเข้า `Page.description_html` และล้าง `description_binary` ตอนอัปเดต เพื่อให้ editor โหลดเนื้อหาใหม่จาก HTML
 - ลบ page: ใช้ soft delete (`page.delete()`) กู้คืนได้ · ลบเฉพาะที่ผู้ใช้สั่ง
