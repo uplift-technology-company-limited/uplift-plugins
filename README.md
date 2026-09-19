@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/github/license/uplift-technology-company-limited/uplift-plugins?color=blue)](LICENSE)
 [![Release](https://img.shields.io/github/v/tag/uplift-technology-company-limited/uplift-plugins?label=release&sort=semver&color=success)](https://github.com/uplift-technology-company-limited/uplift-plugins/releases)
 [![Top language](https://img.shields.io/github/languages/top/uplift-technology-company-limited/uplift-plugins?color=89e051)](https://github.com/uplift-technology-company-limited/uplift-plugins)
-[![Plugins](https://img.shields.io/badge/plugins-4-orange)](#plugins)
+[![Plugins](https://img.shields.io/badge/plugins-6-orange)](#plugins)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
 A [Claude Code](https://docs.claude.com/en/docs/claude-code) **plugin marketplace**
@@ -39,6 +39,7 @@ need the usual `gh`, `vercel`, `aws`, or `docker` CLIs).
 | **`upliftcontrolversion`** | Every deploy auto-bumps a git tag, bakes it into the artifact, shows it to humans, stops `OTEL_SERVICE_VERSION` drift. | `/plugin install upliftcontrolversion@uplift-plugins` |
 | **`upliftgha`** | Set up / migrate / audit GitHub Actions CI/CD — incl. Jenkins → GHA. Routes to the two above; owns AWS EC2 + ECS shapes. | `/plugin install upliftgha@uplift-plugins` |
 | **`uplift-repo-polish`** | Polish a repo's public face — README badges + structure, About (topics/description/homepage), LICENSE, and a GitHub Release from a tag. | `/plugin install uplift-repo-polish@uplift-plugins` |
+| **`uplift-plane-page`** | Write or convert docs into Plane pages people can read — plain headings, tech detail underneath, no `→`/`—` shorthand, mermaid rendered to images. Publishes to self-hosted Plane. | `/plugin install uplift-plane-page@uplift-plugins` |
 | **`uplift-cli`** | Run + troubleshoot an Uplift dev machine — the local Postgres/Redis/RabbitMQ stack, the workspace repos, AWS SSO/ECR. <sup>lives in the `uplift-cli` repo</sup> | `/plugin install uplift-cli@uplift-plugins` |
 
 ---
@@ -148,6 +149,33 @@ it runs detect → README → About → LICENSE → (confirm →) Release.
 /plugin install uplift-repo-polish@uplift-plugins
 ```
 
+### `uplift-plane-page`
+
+Turns engineering documents (design docs, plans, tasklists, schemas) into
+**Plane pages that a PM or lead can read without decoding them**. Pages written
+for an AI or a developer tend to chain ideas with `→` and `—`, link with
+Obsidian `[[wikilinks]]`, and paste mermaid code that Plane shows as a raw code
+box. The skill (written in Thai, for Thai-language teams) rewrites them:
+
+- **Structure** — source + status line on top (so a design isn't mistaken for
+  shipped code), a 3–5 line summary, plain-language headings, and technical
+  detail under a "รายละเอียดเทคนิค" subsection instead of mixed into the prose.
+- **`scripts/check.sh`** — counts arrows, em-dashes, wikilinks, `·` chains and
+  over-long lines outside tables/code; fails until the page is clean.
+- **`scripts/render_mermaid.mjs`** — renders mermaid to PNG with Thai fonts
+  (Playwright + mermaid from any local `node_modules`).
+- **`scripts/publish.py`** — creates/updates a page on **self-hosted** Plane
+  through the API container's Django shell (the public API can't write pages),
+  uploads the diagrams as page images, and documents the trap where Plane's
+  live server writes an already-opened page's old content back over an update.
+
+Publishing needs shell access to the host running Plane (`docker exec`); the
+writing rules work anywhere, including claude.ai.
+
+```
+/plugin install uplift-plane-page@uplift-plugins
+```
+
 ### `uplift-cli`
 
 Teaches Claude to drive the **`uplift` CLI** — the local dev stack (`up`, `down`,
@@ -179,6 +207,7 @@ plugins/
   upliftcontrolversion/
   upliftgha/
   uplift-repo-polish/
+  uplift-plane-page/
                                   # uplift-cli is NOT here — sourced from the
                                   # uplift-cli repo via git-subdir + a pinned SHA
 scripts/release.sh                # shared vX.Y.Z release (bumps tag + plugin.json versions)
