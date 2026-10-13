@@ -175,11 +175,15 @@ Once the registry exists (or a Terraform PR is at least planned), read
 ## Step 6 — Wire the version contract (always, every target)
 
 Once the deploy mechanics exist, invoke the `upliftcontrolversion` skill via
-the Skill tool so `compute_version`/`tag_release` and the shape-specific
-inject/display (build-arg for a frontend, task-def env for a backend) get
-wired in consistently. Do this even on the Vercel path — `upliftvercel` calls
-into the same contract, but verify it actually happened rather than assuming
-the hand-off covered it.
+the Skill tool so `compute_version`/`tag_release`/`publish_release` and the
+shape-specific inject/display (build-arg for a frontend, task-def env for a
+backend) get wired in consistently. Do this even on the Vercel path —
+`upliftvercel` calls into the same contract, but verify it actually happened
+rather than assuming the hand-off covered it. The version contract isn't done
+until the tag push **and** the matching GitHub Release publish are both in
+the workflow — a tag with no Release is a common half-finished state (see
+`upliftcontrolversion`'s own notes on this); don't sign off on Step 6 without
+confirming both exist.
 
 ## Step 7 — Branch gate + first-run convention (always, every path)
 

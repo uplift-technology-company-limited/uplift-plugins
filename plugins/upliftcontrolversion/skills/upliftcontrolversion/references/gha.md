@@ -17,10 +17,39 @@ The tag-bump lives in different places depending on whether the workflow wraps
 ## Wrapper workflow (admin-portal-style)
 
 The job just runs `./scripts/deploy.sh deploy`. `deploy.sh` already does
-`compute_version` (before build) and `tag_release` (after rollout), so **nothing
-else is needed** beyond the `permissions`/`fetch-depth` above. To cut a
-feature/breaking release, run the job with `BUMP` set (e.g. a `workflow_dispatch`
-input piped into `env: { BUMP: ... }`, or just deploy manually with
+`compute_version` (before build) and `tag_release` (after rollout) — but
+`tag_release` only pushes the git tag, it does **not** publish a GitHub
+Release (see (e) above for why that's a separate step). Add a
+`publish_release` function next to `tag_release` in `deploy.sh` (same
+curl-not-`gh` reasoning applies — the self-hosted runner has no `gh` CLI):
+
+```bash
+# Publish a GitHub Release from the tag `tag_release` just pushed. Best-effort
+# — never fails the deploy. Needs GH_TOKEN (pass through from the calling
+# workflow step: `env: { GH_TOKEN: ${{ github.token }} }`); GITHUB_REPOSITORY
+# is already set by Actions.
+publish_release() {
+  [ -n "$RELEASE_TAG" ] || return 0
+  [ -n "$GH_TOKEN" ] || { echo "No GH_TOKEN — skipping Release publish" >&2; return 0; }
+  local payload
+  payload="$(node -e 'console.log(JSON.stringify({tag_name: process.argv[1], name: process.argv[1], generate_release_notes: true}))' "$RELEASE_TAG")"
+  if curl -sf -X POST \
+      -H "Authorization: Bearer $GH_TOKEN" \
+      -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases" \
+      -d "$payload" >/dev/null; then
+    echo "Published Release ${RELEASE_TAG}" >&2
+  else
+    echo "Could not publish Release ${RELEASE_TAG} (non-fatal)" >&2
+  fi
+}
+```
+
+Call it right after `tag_release` in the `deploy)` case, and make sure the
+workflow step that invokes `./scripts/deploy.sh deploy` passes `GH_TOKEN:
+${{ github.token }}` through `env:`. To cut a feature/breaking release, run
+the job with `BUMP` set (e.g. a `workflow_dispatch` input piped into
+`env: { BUMP: ... }`, or just deploy manually with
 `BUMP=minor ./scripts/deploy.sh deploy`).
 
 ## Explicit-steps workflow (sso-style)
@@ -89,7 +118,7 @@ already in the live task-def:
 Validate the jq before shipping: pipe a sample task-def JSON through it and
 confirm the two env vars appear and the rest is untouched.
 
-### d) Push-tag step (LAST — only runs if everything above succeeded)
+### d) Push-tag step (only runs if everything above succeeded)
 
 Put this after the smoke-test step. Because earlier steps `exit 1` on failure,
 the job stops before here — so the tag is only pushed for a green deploy:
@@ -108,6 +137,43 @@ the job stops before here — so the tag is only pushed for a green deploy:
           git push origin "$TAG"
           echo "Tagged $TAG"
 ```
+
+### e) Publish GitHub Release step (right after the tag push, every deploy)
+
+A git tag and a GitHub Release are two different things — the tag is a git
+object, the Release is a GitHub-only surface layered on top of it, and
+nothing creates the Release for you. Skipping this step is the single most
+common half-finished state of this skill: the tag pushes fine on every
+deploy, the Releases tab looks populated because someone once ran a
+one-time backfill (see `uplift-repo-polish`'s Releases surface), and then
+every deploy *after* that backfill silently produces a tag with no matching
+Release — invisible until someone happens to compare `git tag` against
+`gh release list`. Always wire this, not just the tag push:
+
+```yaml
+      - name: Publish GitHub Release
+        continue-on-error: true   # never fail an otherwise-successful deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" \
+            -d "$(node -e 'console.log(JSON.stringify({tag_name: process.env.TAG, name: process.env.TAG, generate_release_notes: true}))')"
+```
+
+> **Use `curl` against the REST API, not `gh release create`.** The
+> `[self-hosted, linux, arm64, uplift-deploy]` runner is a shared EC2 box
+> without the `gh` CLI installed — `gh release create` fails with `command
+> not found` (exit 127) there. `curl` + `GITHUB_TOKEN` (auto-provided as
+> `github.token`, needs `permissions: contents: write` — the same
+> permission the tag push already requires) has no extra dependency and
+> works on both self-hosted and `ubuntu-latest`. `generate_release_notes:
+> true` gets you the same commit-summary notes `gh release create
+> --generate-notes` would, without needing the binary.
+> `GITHUB_REPOSITORY` is a default Actions env var — no need to set it.
 
 ## First-run checklist for a newly-wired explicit workflow
 

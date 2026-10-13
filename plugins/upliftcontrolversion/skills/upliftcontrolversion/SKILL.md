@@ -35,6 +35,12 @@ number is **baked into the artifact**, **shown to humans** (UI label and/or a
 - **One number, everywhere.** The same `APP_VERSION` feeds the UI label, the
   `/version`/`/health` API, and `OTEL_SERVICE_VERSION`, so a trace in Grafana and
   the sidebar always agree on what's live.
+- **The tag is half the contract — the GitHub Release is the other half.**
+  A pushed `vX.Y.Z` tag with no matching Release looks fine at a glance (the
+  version shows up in the UI, `/version` answers correctly) but leaves the
+  Releases tab silently incomplete. Every workflow this skill wires must
+  publish a Release right after it pushes the tag, not just push the tag —
+  see Step 2.
 
 ## Step 0 — Identify the repo shape
 
@@ -105,15 +111,41 @@ tag_release() {
     echo "Could not push tag ${RELEASE_TAG} (non-fatal)" >&2
   fi
 }
+
+# Publish a GitHub Release from the tag `tag_release` just pushed. A tag is a
+# git object; a Release is a separate GitHub-only surface that nothing creates
+# automatically — skip this and the Releases tab silently stops updating after
+# whatever tag last got backfilled by hand. Uses curl, not `gh release create`
+# — the self-hosted runner (`uplift-deploy`) has no `gh` CLI installed.
+# Best-effort: never fails the deploy. Needs GH_TOKEN passed through from the
+# calling workflow step (`env: { GH_TOKEN: ${{ github.token }} }`);
+# GITHUB_REPOSITORY is already set by Actions.
+publish_release() {
+  [ -n "$RELEASE_TAG" ] || return 0
+  [ -n "$GH_TOKEN" ] || { echo "No GH_TOKEN — skipping Release publish" >&2; return 0; }
+  local payload
+  payload="$(node -e 'console.log(JSON.stringify({tag_name: process.argv[1], name: process.argv[1], generate_release_notes: true}))' "$RELEASE_TAG")"
+  if curl -sf -X POST \
+      -H "Authorization: Bearer $GH_TOKEN" \
+      -H "Accept: application/vnd.github+json" \
+      "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases" \
+      -d "$payload" >/dev/null; then
+    echo "Published Release ${RELEASE_TAG}" >&2
+  else
+    echo "Could not publish Release ${RELEASE_TAG} (non-fatal)" >&2
+  fi
+}
 ```
 
-Wire into the `deploy)` case — `compute_version` first, `tag_release` last:
+Wire into the `deploy)` case — `compute_version` first, `tag_release` +
+`publish_release` last:
 
 ```bash
   deploy)
     compute_version                 # <-- added: sets APP_VERSION + RELEASE_TAG
     # ... existing build / ecr / push / register / update-service ...
     tag_release                     # <-- added: push tag only after success
+    publish_release                 # <-- added: publish the matching Release
     ;;
 ```
 
@@ -125,7 +157,7 @@ In the task-def `environment` array, add `APP_VERSION` and point
 { "name": "OTEL_SERVICE_VERSION", "value": "${APP_VERSION}" }
 ```
 
-## Step 2 — Let the GHA workflow push the tag
+## Step 2 — Let the GHA workflow push the tag AND publish the Release
 
 `.github/workflows/deploy.yml` needs write access + full history:
 
@@ -138,12 +170,24 @@ In the task-def `environment` array, add `APP_VERSION` and point
           fetch-depth: 0   # full history + tags for `git describe`
 ```
 
-- If the workflow **wraps `scripts/deploy.sh`** (like admin-portal), that's all —
-  deploy.sh does the bump/push.
+- If the workflow **wraps `scripts/deploy.sh`** (like admin-portal), deploy.sh
+  does the bump/push — but add `publish_release` next to `tag_release` (both
+  live in `deploy.sh`, see Step 1 above) so the Release gets published too, not
+  just the tag.
 - If the workflow uses **explicit steps** (like sso: describe-task-def → jq patch
   → register), the version must be computed in the workflow and injected via jq.
   See [references/gha.md](references/gha.md) for the compute step, the jq env
-  upsert, and the push-tag step (with a `workflow_dispatch` bump input).
+  upsert, the push-tag step, and the publish-Release step (with a
+  `workflow_dispatch` bump input).
+
+**Don't stop at the tag push.** A tag with no matching Release is the most
+common half-finished state of this skill — it looks done (the version shows
+up everywhere it's supposed to) but the Releases tab silently stops growing
+after whatever was backfilled once. Always wire the publish-Release step in
+the same change as the tag push, never as a follow-up. See
+[references/gha.md](references/gha.md) §(e) for the exact step — it uses
+`curl` against the REST API, not `gh release create`, because the self-hosted
+runner has no `gh` CLI.
 
 ## Step 3 — Inject + display (shape-specific)
 
@@ -169,11 +213,19 @@ aws ecs describe-task-definition --task-definition <family> --region ap-southeas
 curl -s https://<service-host>/version   # -> {"service":"...","version":"X.Y.Z"}
 
 # 3b. frontend: the UI label shows vX.Y.Z (baked NEXT_PUBLIC_APP_VERSION == the tag)
+
+# 4. the GitHub Release was published to match — NOT just the tag
+gh release view "$(git tag --list 'v*' | sort -V | tail -n1)" --repo <owner>/<repo>
 ```
 
 The strongest single check is #2: `OTEL_SERVICE_VERSION` == the new tag proves
 `APP_VERSION` flowed through the whole pipe (it's the same variable that feeds
-the build-arg / API).
+the build-arg / API). But don't skip #4 — a repo can pass 1–3 perfectly (tag
+pushed, version baked in, version displayed) while `publish_release` is
+missing or silently failing, and that only shows up by checking the Release
+itself. If #4 fails on a *second* deploy right after a first one succeeded,
+suspect a missing `GH_TOKEN` env pass-through rather than the curl call being
+wrong — that's the most common way this half-works once and then goes dark.
 
 ## Conventions & gotchas (Uplift-specific)
 
@@ -191,3 +243,17 @@ the build-arg / API).
 - **Don't double-prefix.** The tag is `vX.Y.Z`; pass the numeric `X.Y.Z` to
   `APP_VERSION`/`NEXT_PUBLIC_APP_VERSION` and let the UI render the `v` (`v{ver}`),
   or pass `v...` and don't prepend — pick one, not both.
+- **A one-time Release backfill is not the same as ongoing auto-publish.** If
+  you're asked to "make the Releases tab show up" on a repo that already has
+  this skill's tag-bump wired, that's `uplift-repo-polish`'s job (it backfills
+  Releases from existing tags) — but check whether this skill's own
+  publish-Release step (Step 2 / `references/gha.md` §e) is *also* wired into
+  the deploy workflow. If it isn't, the backfill will look complete today and
+  quietly fall behind on every deploy after it. Flag that gap explicitly
+  rather than letting a clean-looking Releases tab imply the pipeline handles
+  it going forward.
+- **No `gh` CLI on the self-hosted runner.** Every Release-publish step in this
+  skill uses `curl` against the GitHub REST API, never `gh release create` —
+  the shared `[self-hosted, linux, arm64, uplift-deploy]` box doesn't have the
+  `gh` binary installed, and that call fails silently in a `continue-on-error`
+  step (looks green, publishes nothing) unless you're checking Verify #4.

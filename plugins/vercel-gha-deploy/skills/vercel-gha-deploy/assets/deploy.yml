@@ -1,17 +1,19 @@
 name: Deploy <PROJECT_NAME> (production · Vercel)
 
-# Vercel deploy from GitHub Actions + auto-bumped vX.Y.Z tag. The runner builds
-# with NEXT_PUBLIC_APP_VERSION baked in, deploys the prebuilt output to Vercel
-# production, then pushes the tag ONLY on success. All the logic lives in
-# scripts/deploy.sh, so a CI deploy is identical to a manual
-# `VERCEL_TOKEN=… ./scripts/deploy.sh deploy`.
+# Vercel deploy with the version contract, ALL steps inline in this workflow
+# (explicit-steps style — no scripts/deploy.sh wrapper): typecheck gate →
+# compute vX.Y.Z → build with the version baked in → vercel deploy --prebuilt
+# --prod → push the tag ONLY on success → publish a GitHub Release from the
+# tag → smoke test.
 #
-# Secrets: VERCEL_TOKEN (org-level recommended), plus VERCEL_ORG_ID /
-# VERCEL_PROJECT_ID per repo (from .vercel/project.json).
+# Secrets: VERCEL_TOKEN (org-level secret recommended). VERCEL_ORG_ID /
+# VERCEL_PROJECT_ID are per-repo (from .vercel/project.json).
+#
+# Branch gate: deploy from main only. This workflow hard-fails on any other ref.
 
 on:
   # TODO(first-run): arm auto-deploy after the first workflow_dispatch run is
-  # verified green (tag pushed + UI shows the new vX.Y.Z):
+  # verified green (tag pushed + Release published + UI shows the new vX.Y.Z):
   # push:
   #   branches: [main]
   workflow_dispatch:
@@ -28,17 +30,15 @@ concurrency:
 
 jobs:
   deploy:
-    name: Typecheck gate → build → Vercel prod (+ version tag)
-    # Use GitHub-hosted runners, or a self-hosted label, e.g.:
-    #   runs-on: [self-hosted, linux, arm64, <your-runner-label>]
-    runs-on: ubuntu-latest
+    name: Typecheck gate → build → Vercel prod (+ version tag + Release)
+    runs-on: ubuntu-latest # or: [self-hosted, linux, arm64, <your-label>]
     timeout-minutes: 20
 
     permissions:
-      contents: write # deploy.sh auto-bumps + pushes the vX.Y.Z release tag
+      contents: write # push the vX.Y.Z release tag + publish the GitHub Release
 
     env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}          # org-level secret recommended
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}          # org-level secret
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
@@ -57,17 +57,73 @@ jobs:
             exit 1
           fi
 
-      # Swap for your package manager: bun / npm / pnpm / yarn.
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile # or npm ci / pnpm i --frozen-lockfile
+
+      - name: Lint (non-gating)
+        continue-on-error: true
+        run: bun run lint
 
       - name: Type check
-        run: npm run typecheck
+        run: bun run typecheck
 
-      - name: Deploy (scripts/deploy.sh)
+      - name: Compute release version
+        id: ver
         env:
           BUMP: ${{ github.event.inputs.bump }}
-        run: ./scripts/deploy.sh deploy
+        run: |
+          git fetch --tags --quiet origin || true
+          # sort -V = global highest semver; `git describe` is topology-nearest
+          # and can pick a lower base → non-monotonic version.
+          LATEST=$(git tag --list 'v*' | sort -V | tail -n1)
+          LATEST=${LATEST:-v0.0.0}
+          IFS='.' read -r MAJ MIN PAT <<< "${LATEST#v}"
+          case "$BUMP" in
+            major) MAJ=$((MAJ+1)); MIN=0; PAT=0 ;;
+            minor) MIN=$((MIN+1)); PAT=0 ;;
+            *)     PAT=$((PAT+1)) ;;   # default patch (also push:main with no input)
+          esac
+          TAG="v$MAJ.$MIN.$PAT"
+          while git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; do PAT=$((PAT+1)); TAG="v$MAJ.$MIN.$PAT"; done
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Version: $TAG (bump=${BUMP:-patch})"
+
+      - name: Pull Vercel project settings (production)
+        run: bunx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build (version baked in)
+        env:
+          NEXT_PUBLIC_APP_VERSION: ${{ steps.ver.outputs.version }}
+        run: bunx vercel@latest build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt to production
+        run: bunx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Push release tag (only after a successful deploy)
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          git config user.name  "deploy-bot"
+          git config user.email "deploy@example.com"
+          git tag -a "$TAG" -m "$TAG — automated Vercel deploy"
+          git push origin "$TAG"
+
+      - name: Publish GitHub Release (best-effort)
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # curl the REST API — works even when the runner has no gh CLI. Never
+          # fails the deploy; a missed Release can be backfilled from the tag.
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/releases" \
+            -d "{\"tag_name\":\"$TAG\",\"name\":\"$TAG\",\"generate_release_notes\":true}" >/dev/null \
+            && echo "Published Release $TAG" \
+            || echo "::warning::Could not publish Release $TAG (non-fatal)"
 
       - name: Smoke test
         run: |

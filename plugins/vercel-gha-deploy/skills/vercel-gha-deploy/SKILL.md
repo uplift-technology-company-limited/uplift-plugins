@@ -94,28 +94,17 @@ package. Choose build-on-Vercel only if you don't want the runner to build.
 
 ---
 
-## Step 2 — `scripts/deploy.sh`
+## Step 2 — `.github/workflows/deploy.yml` — ALL steps inline (explicit-steps)
 
-Copy [assets/deploy.sh](assets/deploy.sh) into the repo at `scripts/deploy.sh`,
-fill the `<PROJECT_NAME>` header, and `chmod +x`. It:
+**The workflow yml IS the pipeline.** Every deploy step — compute version,
+`vercel pull/build/deploy`, tag push, Release publish, smoke test — is written
+**inline in the workflow**. Do **NOT** generate a `scripts/deploy.sh` wrapper —
+a workflow that just calls a shell script hides the pipeline from the Actions
+UI and from PR review, and the wrapper style has been retired.
 
-1. Loads creds from a gitignored `.env` (or `~/.config/<repo>.env`, or
-   `$DEPLOY_ENV_FILE`) **without clobbering** vars already set by CI — so
-   `./scripts/deploy.sh deploy` just works locally, and a persistent runner can
-   keep the token on-box.
-2. `compute_version` — highest `vX.Y.Z` tag via `sort -V` (NOT `git describe`,
-   which is topological and can mint a non-monotonic version) → bump
-   `${BUMP:-patch}` → set `APP_VERSION`. Pure, no side effects.
-3. Builds with `NEXT_PUBLIC_APP_VERSION` exported, deploys `--prebuilt --prod`.
-4. `tag_release` — annotated tag + push, **only after** a successful deploy;
-   non-fatal if the push fails.
-
----
-
-## Step 3 — `.github/workflows/deploy.yml`
-
-Copy [assets/deploy.yml](assets/deploy.yml), fill `<PROJECT_NAME>`, `<PROD_DOMAIN>`,
-and your runner label. Key pieces that must survive edits:
+Copy [assets/deploy.yml](assets/deploy.yml), fill `<PROJECT_NAME>`,
+`<PROD_DOMAIN>`, and your runner label. The step sequence that must survive
+edits:
 
 ```yaml
 on:
@@ -127,7 +116,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest         # or: [self-hosted, linux, arm64, <your-label>]
     permissions:
-      contents: write              # push the auto-bumped vX.Y.Z tag
+      contents: write              # push the auto-bumped vX.Y.Z tag + publish the Release
     env:
       VERCEL_TOKEN:      ${{ secrets.VERCEL_TOKEN }}      # org-level secret
       VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
@@ -135,20 +124,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }   # full history + tags for the version bump
-      - name: Guard main
-        env: { GH_REF: ${{ github.ref }} }   # via env, never inline in run:
-        run: '[ "$GH_REF" = "refs/heads/main" ] || { echo "::error::deploy from main only"; exit 1; }'
-      - run: bun install --frozen-lockfile   # or npm ci / pnpm i --frozen-lockfile
-      - run: bun run typecheck
-      - name: Deploy
-        env: { BUMP: ${{ github.event.inputs.bump }} }
-        run: ./scripts/deploy.sh deploy
-      - name: Smoke test   # curl https://<PROD_DOMAIN>/ until 200
+      - name: Guard main           # env-indirected ref check, hard-fail off main
+      - name: Install + typecheck  # bun install --frozen-lockfile && bun run typecheck (or npm/pnpm)
+      - name: Compute release version   # id: ver — sort -V highest v* tag + BUMP,
+                                        # outputs tag=vX.Y.Z / version=X.Y.Z
+      - name: Pull Vercel settings      # bunx vercel@latest pull --yes --environment=production
+      - name: Build (version baked)     # env NEXT_PUBLIC_APP_VERSION: ${{ steps.ver.outputs.version }}
+      - name: Deploy prebuilt           # bunx vercel@latest deploy --prebuilt --prod
+      - name: Push release tag          # ONLY after success — annotated tag + push
+      - name: Publish GitHub Release    # curl POST /releases (generate_release_notes),
+                                        # best-effort — never fails the deploy
+      - name: Smoke test                # curl https://<PROD_DOMAIN>/ until 200
 ```
 
-Never interpolate `${{ github.* }}` directly inside a `run:` script — route it
-through `env:` (command-injection safety). The choice input `bump` is already safe
-via `env: BUMP`.
+Rules that keep this safe and monotonic:
+
+- **Version compute**: highest `vX.Y.Z` via `git tag --list 'v*' | sort -V | tail -n1`
+  (NOT `git describe` — topological, can mint a non-monotonic version), bump
+  `${BUMP:-patch}`, skip forward over any tag that already exists.
+- **Tag only after a successful deploy** — a failed build must leave no orphan tag.
+- **Release publish is best-effort** (curl the REST API — works even when the
+  runner has no `gh` CLI); a missed Release can be backfilled from the tag, so
+  never fail the deploy on it.
+- Never interpolate `${{ github.* }}` or `${{ steps.* }}` directly inside a
+  `run:` script — route everything through `env:` (command-injection safety).
+
+---
+
+## Step 3 — Legacy wrapper style (`scripts/deploy.sh`) — deprecated
+
+Older repos may still carry a `scripts/deploy.sh` that the workflow wraps.
+**Don't create new ones, and don't copy that pattern forward.** When touching
+such a repo's pipeline, migrate the steps inline into the yml (same sequence as
+Step 2) in the same change — and say so. Local one-off deploys are not a reason
+to keep the wrapper: prod deploys go through the workflow only
+(`gh workflow run deploy.yml -f bump=…`).
 
 ---
 
@@ -179,9 +189,10 @@ gh secret set VERCEL_PROJECT_ID  -R $R --body "<projectId from project.json>"
 # VERCEL_TOKEN — inherited from the org; only set per-repo if you don't use org secrets
 ```
 
-**Runner-local alternative:** on a persistent self-hosted runner, the token can
-instead live in `~/.config/<repo>.env` on the box (deploy.sh reads it) — then no
-GitHub secret is needed for the token at all.
+**Runner-local alternative:** on a persistent self-hosted runner, the token
+could live in an on-box env file — but with the explicit-steps workflow the
+GitHub-secret path is the only supported default; don't wire runner-local env
+files for new repos.
 
 ---
 
@@ -193,8 +204,9 @@ gh workflow run deploy.yml -R $R -f bump=patch
 
 Verify (don't claim done without this):
 1. tag pushed — `git ls-remote --tags origin | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1`
-2. the live site shows the new `vX.Y.Z`
-3. `https://<PROD_DOMAIN>/` returns 200
+2. GitHub Release published for that tag — `gh release view <tag> -R $R`
+3. the live site shows the new `vX.Y.Z`
+4. `https://<PROD_DOMAIN>/` returns 200
 
 Only then uncomment `push: { branches: [main] }` so future merges auto-deploy.
 
@@ -204,9 +216,11 @@ Only then uncomment `push: { branches: [main] }` so future merges auto-deploy.
 
 - **A gitignored `.env` is NOT on the CI runner.** `actions/checkout` is a fresh
   clone, so a repo-tracked `.env` won't exist in CI. Creds come from GitHub
-  secrets or a persistent on-box file — never from a committed `.env` (which would
-  leak the token). `.env` support in deploy.sh is for local runs and on-box runner
-  files only.
+  secrets — never from a committed `.env` (which would leak the token).
+- **Tag without a Release is a half-finished state.** The Release-publish step
+  is part of the standard sequence (Step 2) — if a repo's workflow tags but
+  never publishes Releases, add the publish step and backfill existing tags
+  via `gh release create`.
 - **Commit-author gate (if you enabled one).** Some teams configure Vercel so a
   production deploy only proceeds when the HEAD commit's author is on an allow-list
   — otherwise the build finishes in ~0 ms and nothing ships (a silent no-op, no red

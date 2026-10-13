@@ -171,6 +171,22 @@ done   # then re-run the newest with --latest
 > explicit go-ahead. Same for changing a public repo's description/topics the
 > user hasn't clearly asked for.
 
+> **A backfill fixes the past, not the future.** Everything above creates
+> Releases for tags that *already exist* — it does nothing about the *next*
+> tag the deploy pipeline pushes. If the repo's deploy workflow pushes
+> `vX.Y.Z` tags (the `upliftcontrolversion` convention) but has no
+> publish-Release step, the backfill you just ran will look complete today
+> and then silently stop matching reality on the very next deploy — a tag
+> lands, no Release follows, and nobody notices until someone compares
+> `git tag` against `gh release list` by hand (this happened for real: a repo
+> had a clean-looking Releases tab from a one-time backfill while three
+> subsequent deploys each pushed a tag with no Release). **Check for this
+> every time you touch the Releases surface**: does `.github/workflows/*.yml`
+> (or `scripts/deploy.sh`) already have a step that publishes a Release right
+> after it pushes the tag? If not, say so explicitly and hand that off to the
+> `upliftcontrolversion` skill (Step 2 / `references/gha.md` §e) — don't let a
+> populated-looking Releases tab imply the gap is closed.
+
 ### 5. Deployments — reflect real deploys (needs pipeline wiring)
 
 The **Deployments** tab is populated by the GitHub Deployments API — a deploy has
@@ -208,7 +224,10 @@ Do the safe, reversible edits first and the public one last:
    SPDX file (MIT/Apache/GPL); proprietary/private → an explicit proprietary
    LICENSE + `package.json "license": "UNLICENSED"`.
 5. **Release** — **confirm, then** `gh release create` from the existing tag(s)
-   (backfill the whole tag history if the Releases tab is empty).
+   (backfill the whole tag history if the Releases tab is empty). Then check
+   whether the deploy workflow itself publishes a Release on future tags — if
+   not, flag it and point at `upliftcontrolversion` rather than treating the
+   backfill as the fix.
 6. **Deployments** *(optional — only if the user wants the Deployments tab
    populated)* — wire the deploy pipeline (helper + deploy.sh + CI) and backfill
    the current version. This is a pipeline change, so land it through the repo's
