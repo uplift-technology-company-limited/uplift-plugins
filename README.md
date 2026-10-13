@@ -172,6 +172,21 @@ box. The skill (written in Thai, for Thai-language teams) rewrites them:
 Publishing needs shell access to the host running Plane (`docker exec`); the
 writing rules work anywhere, including claude.ai.
 
+The plugin also ships a second skill, **`plane-plan`**, for remediation plans
+built from a set of Plane work items (audit results, bug lists, UX tickets). A
+plan written from ticket text alone describes the day the tickets were filed,
+not today, so the skill makes Claude check reality first:
+
+- **Audit before planning**: read every item's latest comments and compare with
+  the code on the deployed branch, then judge each item as fixed, partly fixed,
+  not fixed, or not decidable from code.
+- **Nine fixed sections** with English headings and Thai body text: Executive
+  Summary, Current Status, Code Work, Non-code Work, Decisions Needed,
+  Re-verify on Dev, New Findings, How We Close, References.
+- **One table shape** wherever work items appear: key, one-sentence summary,
+  current Plane state. Each item sits in exactly one section.
+- **`references/example-plan.md`**: a short worked example with made-up data.
+
 ```
 /plugin install uplift-plane-page@uplift-plugins
 ```
