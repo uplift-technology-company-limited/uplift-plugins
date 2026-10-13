@@ -29,7 +29,7 @@
     {
       "name": "uplift-plane-page",
       "source": "./plugins/uplift-plane-page",
-      "description": "Write or convert documents into Plane pages non-developers can read: plain-language headings with technical detail underneath, no arrow/em-dash shorthand, mermaid rendered to images, and a publisher for self-hosted Plane."
+      "description": "Write or convert documents into Plane pages non-developers can read: plain-language headings with technical detail underneath, no arrow/em-dash shorthand, mermaid rendered to images, and a publisher for self-hosted Plane. Includes `plane-plan` for remediation plans built from Plane work items checked against the deployed code."
     },
     {
       "name": "uplift-cli",
