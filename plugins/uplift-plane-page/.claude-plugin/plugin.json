@@ -2,7 +2,7 @@
   "name": "uplift-plane-page",
   "displayName": "Uplift Plane Page",
   "description": "Write or convert documents into Plane pages that non-developers can actually read: plain-language headings with technical detail underneath, no arrow/em-dash shorthand, no Obsidian wikilinks, mermaid rendered to images. Includes a checker, a mermaid-to-PNG renderer (Thai fonts), and a publisher for self-hosted Plane that also guards against the live-server overwrite trap. Also ships `plane-plan`: turn a set of Plane work items into a remediation plan page that matches reality, by checking each item's latest comments and the deployed branch before planning, then splitting the work into code, non-code, decisions and re-verification.",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "author": {
     "name": "Uplift Tech"
   },
